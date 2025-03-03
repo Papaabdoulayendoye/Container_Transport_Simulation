@@ -1,90 +1,141 @@
 from datetime import datetime, timedelta
-import pygame
+import time
 from models import TransportSimulation
-from visualization import SimulationVisualizer
 
 def main():
     # Initialize simulation
     sim = TransportSimulation()
     
-    # Add terminals
-    terminal_a = sim.add_terminal("Terminal A", capacity=1000)
-    terminal_b = sim.add_terminal("Terminal B", capacity=800)
-    terminal_c = sim.add_terminal("Terminal C", capacity=1200)
+    # Add terminals (Port maritime et terminaux fluviaux)
+    terminal_le_havre = sim.add_terminal("Le Havre", capacity=2000)
+    terminal_rouen = sim.add_terminal("Rouen", capacity=1500)
+    terminal_paris = sim.add_terminal("Paris", capacity=1800)
+    terminal_gennevilliers = sim.add_terminal("Gennevilliers", capacity=1200)
+    terminal_bonneuil = sim.add_terminal("Bonneuil", capacity=1000)
+    
+    # Current time for scheduling
+    start_time = datetime.now()
     
     # Add services
-    # Service from A to B, every 4 hours
-    schedule_ab = [
-        datetime.now() + timedelta(hours=i*4)
-        for i in range(6)  # 24 hours of schedule
-    ]
-    service_ab = sim.add_service(
-        origin=terminal_a,
-        destination=terminal_b,
-        capacity=100,
-        duration=timedelta(hours=2),
-        schedule=schedule_ab
-    )
-    
-    # Service from B to C, every 6 hours
-    schedule_bc = [
-        datetime.now() + timedelta(hours=i*6)
+    # Service Le Havre -> Rouen (4 fois par jour)
+    schedule_hr = [
+        start_time + timedelta(hours=i*6)
         for i in range(4)  # 24 hours of schedule
     ]
-    service_bc = sim.add_service(
-        origin=terminal_b,
-        destination=terminal_c,
-        capacity=150,
+    service_hr = sim.add_service(
+        origin=terminal_le_havre,
+        destination=terminal_rouen,
+        capacity=200,
         duration=timedelta(hours=3),
-        schedule=schedule_bc
+        schedule=schedule_hr
     )
     
-    # Add barges
-    barge1 = sim.add_barge(capacity=50, terminal_id=terminal_a)
-    barge2 = sim.add_barge(capacity=75, terminal_id=terminal_b)
+    # Service Rouen -> Paris (3 fois par jour)
+    schedule_rp = [
+        start_time + timedelta(hours=i*8)
+        for i in range(3)
+    ]
+    service_rp = sim.add_service(
+        origin=terminal_rouen,
+        destination=terminal_paris,
+        capacity=150,
+        duration=timedelta(hours=4),
+        schedule=schedule_rp
+    )
     
-    # Add some container requests
-    for i in range(5):
+    # Service Paris -> Gennevilliers (6 fois par jour)
+    schedule_pg = [
+        start_time + timedelta(hours=i*4)
+        for i in range(6)
+    ]
+    service_pg = sim.add_service(
+        origin=terminal_paris,
+        destination=terminal_gennevilliers,
+        capacity=100,
+        duration=timedelta(hours=1),
+        schedule=schedule_pg
+    )
+    
+    # Service Paris -> Bonneuil (4 fois par jour)
+    schedule_pb = [
+        start_time + timedelta(hours=i*6)
+        for i in range(4)
+    ]
+    service_pb = sim.add_service(
+        origin=terminal_paris,
+        destination=terminal_bonneuil,
+        capacity=120,
+        duration=timedelta(hours=2),
+        schedule=schedule_pb
+    )
+    
+    # Add barges with different capacities
+    barge1 = sim.add_barge(capacity=100, terminal_id=terminal_le_havre)  # Grande barge maritime
+    barge2 = sim.add_barge(capacity=80, terminal_id=terminal_le_havre)   # Barge maritime moyenne
+    barge3 = sim.add_barge(capacity=60, terminal_id=terminal_rouen)      # Barge fluviale moyenne
+    barge4 = sim.add_barge(capacity=40, terminal_id=terminal_paris)      # Petite barge fluviale
+    barge5 = sim.add_barge(capacity=40, terminal_id=terminal_paris)      # Petite barge fluviale
+    
+    # Add container requests
+    # Containers from Le Havre to Paris (import maritime)
+    for i in range(10):
         sim.add_container_request(
             type="TEU",
-            origin=terminal_a,
-            destination=terminal_c,
-            available_date=datetime.now() + timedelta(hours=i),
-            due_date=datetime.now() + timedelta(hours=24),
+            origin=terminal_le_havre,
+            destination=terminal_paris,
+            available_date=start_time + timedelta(hours=i),
+            due_date=start_time + timedelta(hours=24),
+            priority=2  # High priority for maritime imports
+        )
+    
+    # Containers from Le Havre to Gennevilliers
+    for i in range(8):
+        sim.add_container_request(
+            type="TEU",
+            origin=terminal_le_havre,
+            destination=terminal_gennevilliers,
+            available_date=start_time + timedelta(hours=i*2),
+            due_date=start_time + timedelta(hours=36),
             priority=1
         )
     
-    # Initialize visualizer
-    viz = SimulationVisualizer(sim)
+    # Containers from Rouen to Bonneuil
+    for i in range(6):
+        sim.add_container_request(
+            type="TEU",
+            origin=terminal_rouen,
+            destination=terminal_bonneuil,
+            available_date=start_time + timedelta(hours=i*3),
+            due_date=start_time + timedelta(hours=48),
+            priority=1
+        )
     
-    # Main simulation loop
-    running = True
-    clock = pygame.time.Clock()
+    print("Starting simulation...")
+    print("Press Ctrl+C to stop the simulation")
     
-    while running:
-        # Handle events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
+    try:
+        # Run simulation for 24 hours with 30-minute steps
+        simulation_duration = timedelta(hours=24)
+        end_time = start_time + simulation_duration
         
-        # Update simulation
-        sim.step()
-        
-        # Update visualization
-        viz.draw()
-        
-        # Control frame rate
-        clock.tick(60)
-        
-        # Every 100 steps, show metrics
-        if sim.current_time.minute % 100 == 0:
-            metrics = sim.get_performance_metrics()
-            viz.plot_metrics(metrics)
+        while sim.current_time < end_time:
+            sim.step()
+            sim.print_status()
+            time.sleep(1)  # Wait 1 second between updates
+            
+    except KeyboardInterrupt:
+        print("\nSimulation stopped by user")
     
-    pygame.quit()
+    # Print final statistics
+    print("\nFinal Statistics:")
+    metrics = sim.get_performance_metrics()
+    print(f"Total containers processed: {metrics['total_containers']}")
+    print(f"Containers delivered: {metrics['delivered']}")
+    print(f"Containers in transit: {metrics['in_transit']}")
+    print(f"Containers waiting: {metrics['waiting']}")
+    print("\nTerminal Utilization:")
+    for terminal, utilization in metrics['terminal_utilization'].items():
+        print(f"{terminal}: {utilization*100:.1f}%")
 
 if __name__ == "__main__":
     main()
